@@ -17,7 +17,7 @@ function validateEscape(a,b,c,d,n){
  return !tableCodePoints.has(cp);
 }
 const crcTable=Uint32Array.from({length:256},(_,i)=>{for(let j=0;j<8;j++)i=(i&1)?(0xedb88320^(i>>>1)):(i>>>1);return i>>>0});
-function crc32(bytes){let c=0xffffffff;for(const b of bytes)c=crcTable[(c^b)&255]^(c>>>8);return (c^0xffffffff)>>>0}
+function crc32(bytes){let c=0xffffffff;for(let i=0;i<bytes.length;i++)c=crcTable[(c^bytes[i])&255]^(c>>>8);return (c^0xffffffff)>>>0}
 function decodeUtf8(bytes){return decoder.decode(bytes)}
 function encode(raw){
  const text=decodeUtf8(raw), out=[]; let acc=0,n=0,bits=0;
@@ -26,7 +26,7 @@ function encode(raw){
  if(n)out.push(acc<<(8-n));
  const record=new Uint8Array(17+out.length), view=new DataView(record.buffer);record.set([80,54,84,88,1]);view.setBigUint64(5,BigInt(bits));view.setUint32(13,crc32(raw));record.set(out,17);return record;
 }
-function decode(record,maxOutput=32*1024*1024){
+function decodeCore(record,maxOutput,verifyCRC){
  if(record.length<17)throw Error('سرآیند ناقص است');
  if(record[0]!==80||record[1]!==54||record[2]!==84||record[3]!==88||record[4]!==1)throw Error('قالب یا نسخه نامعتبر است');
  const v=new DataView(record.buffer,record.byteOffset,record.byteLength), big=v.getBigUint64(5);
@@ -58,8 +58,11 @@ function decode(record,maxOutput=32*1024*1024){
   }
  }
  const result=out.subarray(0,total);
- if(crc32(result)!==v.getUint32(13))throw Error('خطای CRC');
+ if(verifyCRC&&crc32(result)!==v.getUint32(13))throw Error('خطای CRC');
  return result;
 }
-const api={encode,decode,decodeUtf8,crc32,TABLE,_validateEscape:validateEscape};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.P6TX=api;
+function decode(record,maxOutput=32*1024*1024){return decodeCore(record,maxOutput,true)}
+// Only for independent timing; never use this path as a verified decoder.
+function decodeForBenchmark(record,maxOutput=32*1024*1024){return decodeCore(record,maxOutput,false)}
+const api={encode,decode,decodeUtf8,crc32,TABLE,_validateEscape:validateEscape,_decodeForBenchmark:decodeForBenchmark};if(typeof module!=='undefined'&&module.exports)module.exports=api;root.P6TX=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

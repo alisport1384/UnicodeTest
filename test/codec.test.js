@@ -47,3 +47,11 @@ test('new escape decoder agrees with version 1.1 on mutated payloads',()=>{
  const result=(codec,bytes)=>{try{return Buffer.from(codec.decode(bytes)).toString('hex')}catch{return 'INVALID'}};
  for(let i=0;i<3000;i++){let s='';for(let j=0;j<30;j++){let cp=random()%0x110000;if(cp>=0xd800&&cp<=0xdfff)cp=32;s+=String.fromCodePoint(cp)}const input=enc.encode(s),record=P.encode(input);assert.equal(result(P,record),result(old,record));const bad=record.slice();bad[random()%bad.length]^=1<<(random()%8);assert.equal(result(P,bad),result(old,bad))}
 });
+
+test('indexed CRC matches previous version on diverse inputs and offsets',()=>{
+ const old=require('./fixtures/decoder-v1.3.js');let x=17;
+ for(let n=0;n<300;n++){const a=new Uint8Array(n+10);for(let i=0;i<a.length;i++){x=(Math.imul(x,1664525)+1013904223)>>>0;a[i]=x>>>24}for(let off=0;off<4;off++){const b=a.subarray(off,off+n);assert.equal(P.crc32(b),old.crc32(b))}}
+});
+test('benchmark-only path omits CRC; normal decoder still rejects corruption',()=>{
+ const b=P.encode(enc.encode('سلام😀'));b[13]^=1;assert.throws(()=>P.decode(b));assert.deepEqual(P._decodeForBenchmark(b),enc.encode('سلام😀'));const bad=b.slice();bad[0]=0;assert.throws(()=>P._decodeForBenchmark(bad));
+});
