@@ -31,3 +31,19 @@ test('malformed escapes, invalid UTF-8, limits, and nonzero offsets',()=>{
   assert.deepEqual(P.decode(wrapped.subarray(3,3+source.length)),enc.encode('سلام 😀'));
   assert.throws(()=>P.decode(source,1));
 });
+
+test('escape validator agrees with strict UTF-8 for exhaustive 1/2-byte and sampled 3/4-byte values',()=>{
+ const strict=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}),table=new Set(Array.from(P.TABLE));
+ function reference(bytes){try{const text=strict.decode(Uint8Array.from(bytes));return Array.from(text).length===1&&!table.has(text)}catch{return false}}
+ function check(bytes){const [a=0,b=0,c=0,d=0]=bytes;assert.equal(P._validateEscape(a,b,c,d,bytes.length),reference(bytes),`bytes ${bytes.map(x=>x.toString(16)).join(' ')}`)}
+ for(let a=0;a<256;a++){check([a]);for(let b=0;b<256;b++)check([a,b])}
+ const boundaries=[0,0x7f,0x80,0x8f,0x90,0x9f,0xa0,0xbf,0xc0,0xc1,0xc2,0xdf,0xe0,0xed,0xef,0xf0,0xf4,0xf5,0xff];
+ for(const a of boundaries)for(const b of boundaries)for(const c of boundaries){check([a,b,c]);for(const d of [0x7f,0x80,0xbf,0xc0])check([a,b,c,d])}
+ let x=0xabcdef;for(let i=0;i<50000;i++){const vals=[];for(let j=0;j<4;j++){x=(Math.imul(x,1664525)+1013904223)>>>0;vals.push(x>>>24)}check(vals);check(vals.slice(0,3))}
+});
+
+test('new escape decoder agrees with version 1.1 on mutated payloads',()=>{
+ const old=require('./fixtures/decoder-v1.1.js');let x=0x456abc;const random=()=>{x=(Math.imul(x,1664525)+1013904223)>>>0;return x};
+ const result=(codec,bytes)=>{try{return Buffer.from(codec.decode(bytes)).toString('hex')}catch{return 'INVALID'}};
+ for(let i=0;i<3000;i++){let s='';for(let j=0;j<30;j++){let cp=random()%0x110000;if(cp>=0xd800&&cp<=0xdfff)cp=32;s+=String.fromCodePoint(cp)}const input=enc.encode(s),record=P.encode(input);assert.equal(result(P,record),result(old,record));const bad=record.slice();bad[random()%bad.length]^=1<<(random()%8);assert.equal(result(P,bad),result(old,bad))}
+});

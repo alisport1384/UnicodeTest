@@ -3,8 +3,8 @@
 // Diagnostic decoder: kept separate from the production decoder so that per-escape
 // timer calls do not contaminate the primary benchmark. Its timings are estimates.
 const P=typeof module!=='undefined'&&module.exports?require('./codec.js'):root.P6TX;
-const enc=new TextEncoder(), decoder=new TextDecoder('utf-8',{fatal:true,ignoreBOM:true});
-const chars=Array.from(P.TABLE), ids=new Set(chars), tableBytes=chars.map(c=>enc.encode(c));
+const enc=new TextEncoder();
+const chars=Array.from(P.TABLE), tableBytes=chars.map(c=>enc.encode(c));
 function profile(record,maxOutput=32*1024*1024){
  const totalStart=performance.now();
  if(record.length<17||record[0]!==80||record[1]!==54||record[2]!==84||record[3]!==88||record[4]!==1)throw Error('قالب یا نسخه نامعتبر است');
@@ -17,12 +17,13 @@ function profile(record,maxOutput=32*1024*1024){
  function get(k){if(pos+k>bits)throw Error('داده ناقص است');const index=Math.floor(pos/8),off=pos%8,word=(data[index]<<8)|(data[index+1]||0);const value=(word>>>(16-off-k))&((1<<k)-1);pos+=k;return value}
  const loopStart=performance.now();
  while(pos<bits){
-  const id=get(6);let b,escapeStart=0;
-  if(id<63){b=tableBytes[id];tableTokens++}
-  else{escapeStart=performance.now();escapes++;const len=get(2)+1;b=new Uint8Array(len);for(let j=0;j<len;j++)b[j]=get(8);const c=decoder.decode(b);if(Array.from(c).length!==1||ids.has(c))throw Error('فرار نامعتبر است')}
-  if(total+b.length>maxOutput)throw Error('خروجی بیش از حد مجاز است');
-  for(let j=0;j<b.length;j++)out[total++]=b[j];
-  if(id===63)escapeMs+=performance.now()-escapeStart;
+  const id=get(6);
+  if(id<63){const b=tableBytes[id];tableTokens++;if(total+b.length>maxOutput)throw Error('خروجی بیش از حد مجاز است');for(let j=0;j<b.length;j++)out[total++]=b[j]}
+  else{const escapeStart=performance.now();escapes++;const len=get(2)+1,a=get(8),b=len>1?get(8):0,c=len>2?get(8):0,d=len>3?get(8):0;
+   if(!P._validateEscape(a,b,c,d,len))throw Error('فرار نامعتبر است');
+   if(total+len>maxOutput)throw Error('خروجی بیش از حد مجاز است');
+   out[total++]=a;if(len>1)out[total++]=b;if(len>2)out[total++]=c;if(len>3)out[total++]=d;escapeMs+=performance.now()-escapeStart;
+  }
  }
  const loopMs=performance.now()-loopStart;
  const result=out.subarray(0,total);
