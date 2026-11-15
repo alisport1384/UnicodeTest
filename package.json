@@ -1,0 +1,1 @@
+{"name":"p6tx-lab","version":"1.0.0","private":true,"scripts":{"test":"node --test test/*.test.js","build":"node scripts/build.js"},"engines":{"node":">=20"}}

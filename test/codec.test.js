@@ -1,0 +1,6 @@
+const test=require('node:test'),assert=require('node:assert/strict'),P=require('../codec.js');
+const enc=new TextEncoder();
+test('exact P6TX golden vector and CRC',()=>{const raw=enc.encode('سلام');assert.equal(Buffer.from(P.encode(raw)).toString('hex'),'5036545801000000000000001822ef6f2235901a');assert.equal(P.crc32(enc.encode('123456789')),0xcbf43926);assert.deepEqual(P.decode(P.encode(raw)),raw)});
+test('lossless edge cases and BOM',()=>{for(const s of ['', 'سلام', 'پژوهش يک ك', '\ufefftext', '\0\r\n', 'می\u200cروم 😀🌍', 'a\u0301', 'الف'.repeat(1000)]){const raw=enc.encode(s);assert.deepEqual(P.decode(P.encode(raw)),raw)}});
+test('random unicode roundtrip',()=>{let x=2026;for(let i=0;i<1000;i++){let s='';for(let j=0;j<i%40;j++){x=(Math.imul(x,1664525)+1013904223)>>>0;let n=x%0x110000;if(n>=0xd800&&n<=0xdfff)n=0x20;s+=String.fromCodePoint(n)}const b=enc.encode(s);assert.deepEqual(P.decode(P.encode(b)),b)}});
+test('reject malformed and invalid UTF-8',()=>{const b=P.encode(enc.encode('سلام'));for(const bad of [b.slice(0,-1),Uint8Array.from([...b,0]),Uint8Array.from([0,...b.slice(1)]),Uint8Array.from(b,(x,i)=>i===13?x^1:x)])assert.throws(()=>P.decode(bad));const p=P.encode(enc.encode('س'));p[p.length-1]|=1;assert.throws(()=>P.decode(p));for(const raw of [[255],[0xc0,0x80],[0xed,0xa0,0x80]])assert.throws(()=>P.encode(Uint8Array.from(raw)))});

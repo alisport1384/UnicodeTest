@@ -1,0 +1,1 @@
+const fs=require('node:fs');fs.rmSync('site',{recursive:true,force:true});fs.mkdirSync('site');for(const f of ['index.html','style.css','app.js','codec.js'])fs.copyFileSync(f,'site/'+f);console.log('Built static site in site/');
